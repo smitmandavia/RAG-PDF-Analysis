@@ -97,6 +97,7 @@ async def ask(
             "document_name": chunk['metadata']['document_name'],
             "document_id": chunk['metadata']['document_id'],
             "page_number": chunk['metadata']['page_number'],
+            "section_title": chunk['metadata'].get('section_title'),
             "chunk_text": chunk['text'][:300] + "..." if len(chunk['text']) > 300 else chunk['text'],
             "similarity_score": chunk['similarity']
         })

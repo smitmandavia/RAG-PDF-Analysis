@@ -53,8 +53,9 @@ def build_prompt(question: str, context_chunks: list[dict], chat_history: list[d
     for i, chunk in enumerate(context_chunks, 1):
         meta = chunk['metadata']
         score = chunk['similarity']
+        section = meta.get('section_title') or 'Overview'
         context_parts.append(
-            f"[Source {i}: {meta['document_name']}, Page {meta['page_number']}] "
+            f"[Source {i}: {meta['document_name']}, Page {meta['page_number']}, Section: {section}] "
             f"(Relevance: {score:.0%})\n{chunk['text']}"
         )
 
@@ -113,7 +114,8 @@ def _fallback_answer(question: str, context_chunks: list[dict]) -> str:
     for i, chunk in enumerate(context_chunks, 1):
         meta = chunk['metadata']
         score = chunk['similarity']
-        parts.append(f"**[Source {i}: {meta['document_name']}, Page {meta['page_number']}]** (Relevance: {score:.0%})")
+        section = meta.get('section_title') or 'Overview'
+        parts.append(f"**[Source {i}: {meta['document_name']}, Page {meta['page_number']}, Section: {section}]** (Relevance: {score:.0%})")
         parts.append(chunk['text'][:500])
         parts.append("")
 

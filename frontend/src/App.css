@@ -119,6 +119,7 @@ button {
 .brand p,
 .workspace-header p,
 .source-card span,
+.document-subtitle,
 .document-meta,
 .document-actions,
 .empty-panel span,
@@ -424,6 +425,39 @@ button {
 
 .document-meta {
   margin-top: 8px;
+}
+
+.document-subtitle {
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.term-strip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.term-strip.wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.term-strip span {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .document-actions {
@@ -829,7 +863,7 @@ button {
 
 .evidence-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
   border-left: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.9);
@@ -892,6 +926,94 @@ button {
   padding: 14px;
   border-top: 1px solid var(--line);
   background: var(--surface-2);
+}
+
+.profile-panel {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.profile-card {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.profile-title strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.profile-summary {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.profile-cluster {
+  display: grid;
+  gap: 7px;
+}
+
+.profile-cluster > span,
+.profile-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.profile-loading {
+  min-height: 56px;
+  justify-content: center;
+}
+
+.section-list {
+  display: grid;
+  gap: 6px;
+}
+
+.section-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+}
+
+.section-list strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.section-list small {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .recent-question {

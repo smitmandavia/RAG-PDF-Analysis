@@ -11,9 +11,10 @@ from pathlib import Path
 from config import STORAGE_DIR
 from services.pdf_parser import extract_text_from_pdf, get_page_count
 from services.chunker import chunk_pages
+from services.document_analyzer import analyze_document
 from services.embedder import embed_texts
 from services.vector_store import add_chunks
-from db.database import insert_document, update_document
+from db.database import insert_document, update_document, save_document_profile
 
 
 def ingest_document(file_path: str, original_filename: str) -> str:
@@ -35,7 +36,7 @@ def ingest_document(file_path: str, original_filename: str) -> str:
         print(f"\n  -- Ingesting: {original_filename} --")
 
         # Step 1: Extract text
-        print(f"  [1/4] Extracting text...")
+        print(f"  [1/5] Extracting text...")
         pages = extract_text_from_pdf(str(stored_path))
         page_count = get_page_count(str(stored_path))
         print(f"        -> {page_count} pages, {len(pages)} with text")
@@ -44,18 +45,24 @@ def ingest_document(file_path: str, original_filename: str) -> str:
             raise ValueError("No text could be extracted from this PDF. It might be scanned/image-only.")
 
         # Step 2: Chunk
-        print(f"  [2/4] Chunking text...")
+        print(f"  [2/5] Chunking text...")
         chunks = chunk_pages(pages, doc_id, original_filename)
         print(f"        -> {len(chunks)} chunks created")
 
-        # Step 3: Embed
-        print(f"  [3/4] Generating embeddings...")
+        # Step 3: Analyze
+        print(f"  [3/5] Building document profile...")
+        profile = analyze_document(doc_id, original_filename, pages, chunks)
+        save_document_profile(doc_id, profile)
+        print(f"        -> {len(profile['sections'])} sections, {len(profile['key_terms'])} key terms")
+
+        # Step 4: Embed
+        print(f"  [4/5] Generating embeddings...")
         chunk_texts = [c.text for c in chunks]
         embeddings = embed_texts(chunk_texts)
         print(f"        -> {len(embeddings)} embeddings ({len(embeddings[0])}d vectors)")
 
-        # Step 4: Store
-        print(f"  [4/4] Storing in vector database...")
+        # Step 5: Store
+        print(f"  [5/5] Storing in vector database...")
         add_chunks(doc_id, original_filename, chunks, embeddings)
         print("        -> Done!")
 

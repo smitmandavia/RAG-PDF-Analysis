@@ -7,12 +7,20 @@ import re
 from typing import NamedTuple
 from config import CHUNK_SIZE, CHUNK_OVERLAP, MIN_CHUNK_SIZE
 
+COMMON_HEADINGS = {
+    "summary", "professional summary", "experience", "professional experience",
+    "work experience", "education", "skills", "technical skills", "projects",
+    "certifications", "achievements", "contact", "publications", "awards",
+    "technical stack", "timeline", "overview", "background", "conclusion"
+}
+
 
 class Chunk(NamedTuple):
     text: str
     page_number: int
     chunk_index: int
     token_count: int
+    section_title: str
 
 
 def estimate_tokens(text: str) -> int:
@@ -36,20 +44,45 @@ def chunk_pages(pages: list, doc_id: str, doc_name: str) -> list[Chunk]:
     segments = []
     for page in pages:
         paragraphs = _split_paragraphs(page.text)
+        current_section = "Overview"
         for para in paragraphs:
             if para.strip():
+                is_heading = _looks_like_heading(para)
+                if is_heading:
+                    current_section = _normalize_heading(para)
                 segments.append({
                     'text': para.strip(),
-                    'page': page.page_number
+                    'page': page.page_number,
+                    'section': current_section,
+                    'is_heading': is_heading
                 })
 
     # Group segments into chunks of target size
     chunks = []
     current_text = ""
     current_page = segments[0]['page'] if segments else 1
+    current_section = segments[0]['section'] if segments else "Overview"
     chunk_index = 0
 
     for seg in segments:
+        if (
+            seg.get('is_heading')
+            and current_text
+            and estimate_tokens(current_text) >= max(MIN_CHUNK_SIZE // 2, 20)
+        ):
+            chunks.append(Chunk(
+                text=current_text.strip(),
+                page_number=current_page,
+                chunk_index=chunk_index,
+                token_count=estimate_tokens(current_text),
+                section_title=current_section
+            ))
+            chunk_index += 1
+            current_text = ""
+            current_page = seg['page']
+            current_section = seg['section']
+
+        had_current_text = bool(current_text)
         candidate = (current_text + "\n\n" + seg['text']).strip() if current_text else seg['text']
         candidate_tokens = estimate_tokens(candidate)
 
@@ -60,7 +93,8 @@ def chunk_pages(pages: list, doc_id: str, doc_name: str) -> list[Chunk]:
                     text=current_text.strip(),
                     page_number=current_page,
                     chunk_index=chunk_index,
-                    token_count=estimate_tokens(current_text)
+                    token_count=estimate_tokens(current_text),
+                    section_title=current_section
                 ))
                 chunk_index += 1
 
@@ -68,10 +102,12 @@ def chunk_pages(pages: list, doc_id: str, doc_name: str) -> list[Chunk]:
             overlap_text = _get_overlap(current_text, CHUNK_OVERLAP)
             current_text = (overlap_text + "\n\n" + seg['text']).strip() if overlap_text else seg['text']
             current_page = seg['page']
+            current_section = seg['section']
         else:
             current_text = candidate
-            if not chunks:
+            if not had_current_text:
                 current_page = seg['page']
+                current_section = seg['section']
 
     # Don't forget the last chunk
     if current_text.strip() and estimate_tokens(current_text) >= MIN_CHUNK_SIZE:
@@ -79,7 +115,8 @@ def chunk_pages(pages: list, doc_id: str, doc_name: str) -> list[Chunk]:
             text=current_text.strip(),
             page_number=current_page,
             chunk_index=chunk_index,
-            token_count=estimate_tokens(current_text)
+            token_count=estimate_tokens(current_text),
+            section_title=current_section
         ))
 
     # Handle edge case: if a single segment is too large, split it further
@@ -92,14 +129,16 @@ def chunk_pages(pages: list, doc_id: str, doc_name: str) -> list[Chunk]:
                     text=sc,
                     page_number=chunk.page_number,
                     chunk_index=len(final_chunks),
-                    token_count=estimate_tokens(sc)
+                    token_count=estimate_tokens(sc),
+                    section_title=chunk.section_title
                 ))
         else:
             final_chunks.append(Chunk(
                 text=chunk.text,
                 page_number=chunk.page_number,
                 chunk_index=len(final_chunks),
-                token_count=chunk.token_count
+                token_count=chunk.token_count,
+                section_title=chunk.section_title
             ))
 
     return final_chunks
@@ -109,11 +148,54 @@ def _split_paragraphs(text: str) -> list[str]:
     """Split text by paragraph boundaries."""
     # Try double newlines first
     paragraphs = re.split(r'\n\s*\n', text)
-    if len(paragraphs) > 1:
-        return [p.strip() for p in paragraphs if p.strip()]
+    if len(paragraphs) <= 1:
+        paragraphs = text.split('\n')
 
-    # Fall back to single newlines for densely formatted text
-    return [p.strip() for p in text.split('\n') if p.strip()]
+    results = []
+    for paragraph in paragraphs:
+        paragraph = paragraph.strip()
+        if not paragraph:
+            continue
+        results.extend(_split_heading_prefix(paragraph))
+    return results
+
+
+def _looks_like_heading(text: str) -> bool:
+    first_line = text.strip().splitlines()[0].strip()
+    if not first_line or len(first_line) > 90:
+        return False
+    if first_line.startswith(("-", "*", "#")):
+        return False
+
+    words = re.findall(r"[A-Za-z][A-Za-z0-9&/+-]*", first_line)
+    if not 1 <= len(words) <= 9:
+        return False
+
+    normalized = _normalize_heading(first_line).lower()
+    if normalized in COMMON_HEADINGS:
+        return True
+
+    letters = [char for char in first_line if char.isalpha()]
+    if letters and sum(1 for char in letters if char.isupper()) / len(letters) >= 0.72:
+        return True
+
+    return first_line.endswith(":") and len(words) <= 6
+
+
+def _normalize_heading(text: str) -> str:
+    heading = re.sub(r"\s+", " ", text.strip().strip(":")).strip()
+    return heading[:80] or "Overview"
+
+
+def _split_heading_prefix(text: str) -> list[str]:
+    normalized = " ".join(text.split())
+    lowered = normalized.lower()
+    for heading in sorted(COMMON_HEADINGS, key=len, reverse=True):
+        if lowered.startswith(f"{heading} "):
+            rest = normalized[len(heading):].strip(" :-")
+            if len(rest) >= 25:
+                return [_normalize_heading(heading), rest]
+    return [normalized]
 
 
 def _get_overlap(text: str, overlap_tokens: int) -> str:

@@ -3,12 +3,16 @@ import {
   Activity,
   AlertCircle,
   Bot,
+  Brain,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   Clock3,
   Database,
   FileText,
   Filter,
+  Hash,
+  Layers3,
   Loader2,
   MessageSquareText,
   PanelRightClose,
@@ -127,6 +131,8 @@ export default function App() {
   const [topK, setTopK] = useState(5);
   const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [health, setHealth] = useState(null);
+  const [documentProfiles, setDocumentProfiles] = useState({});
+  const [profileLoading, setProfileLoading] = useState(false);
   const [recentQuestions, setRecentQuestions] = useState([]);
   const [notice, setNotice] = useState(null);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -143,6 +149,9 @@ export default function App() {
     () => documents.filter((doc) => selectedDocIds.includes(doc.id)),
     [documents, selectedDocIds]
   );
+
+  const profileDocumentId = selectedDocIds[0] || documents[0]?.id || null;
+  const activeProfile = profileDocumentId ? documentProfiles[profileDocumentId] : null;
 
   const filteredDocuments = useMemo(() => {
     const query = docSearch.trim().toLowerCase();
@@ -172,6 +181,12 @@ export default function App() {
       current.filter((id) => documents.some((doc) => doc.id === id))
     );
   }, [documents]);
+
+  useEffect(() => {
+    if (profileDocumentId && !documentProfiles[profileDocumentId]) {
+      fetchDocumentProfile(profileDocumentId);
+    }
+  }, [profileDocumentId, documentProfiles]);
 
   async function refreshWorkspace() {
     await Promise.all([fetchDocuments(), fetchHealth(), fetchHistory()]);
@@ -206,6 +221,18 @@ export default function App() {
       setRecentQuestions(data.history || []);
     } catch {
       setRecentQuestions([]);
+    }
+  }
+
+  async function fetchDocumentProfile(docId) {
+    setProfileLoading(true);
+    try {
+      const res = await fetch(`${API}/documents/${docId}/profile`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setDocumentProfiles((current) => ({ ...current, [docId]: data }));
+    } finally {
+      setProfileLoading(false);
     }
   }
 
@@ -258,6 +285,11 @@ export default function App() {
       const res = await fetch(`${API}/documents/${docId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
       setActiveSources((sources) => sources.filter((source) => source.document_id !== docId));
+      setDocumentProfiles((current) => {
+        const next = { ...current };
+        delete next[docId];
+        return next;
+      });
       await refreshWorkspace();
     } catch (error) {
       setNotice({ tone: "danger", message: error.message });
@@ -453,14 +485,24 @@ export default function App() {
                 >
                   <button type="button" onClick={() => toggleDocument(doc.id)}>
                     <span className={`status-dot ${status.tone}`} />
-                    <span className="document-name">{doc.filename}</span>
+                    <span className="document-name">{doc.title || doc.filename}</span>
                     <span className={`status-pill ${status.tone}`}>{status.label}</span>
                   </button>
+                  {doc.title && doc.title !== doc.filename && (
+                    <div className="document-subtitle">{doc.filename}</div>
+                  )}
                   <div className="document-meta">
                     <span>{doc.page_count} pages</span>
                     <span>{doc.chunk_count} chunks</span>
                     <span>{formatSize(doc.file_size)}</span>
                   </div>
+                  {doc.key_terms?.length > 0 && (
+                    <div className="term-strip">
+                      {doc.key_terms.slice(0, 4).map((term) => (
+                        <span key={term}>{term}</span>
+                      ))}
+                    </div>
+                  )}
                   <div className="document-actions">
                     <span>{formatDate(doc.uploaded_at)}</span>
                     <IconButton label={`Delete ${doc.filename}`} onClick={() => handleDelete(doc.id)}>
@@ -596,6 +638,7 @@ export default function App() {
                         >
                           <FileText size={13} />
                           {source.document_name}, p.{source.page_number}
+                          {source.section_title ? ` - ${source.section_title}` : ""}
                         </button>
                       ))}
                     </div>
@@ -659,13 +702,90 @@ export default function App() {
                 <div className="source-card-header">
                   <div>
                     <strong>{source.document_name}</strong>
-                    <span>Page {source.page_number}</span>
+                    <span>
+                      Page {source.page_number}
+                      {source.section_title ? ` - ${source.section_title}` : ""}
+                    </span>
                   </div>
                   <ScoreBadge score={source.similarity_score} />
                 </div>
                 <p>{source.chunk_text}</p>
               </article>
             ))
+          )}
+        </div>
+
+        <div className="profile-panel">
+          <div className="section-heading compact">
+            <span>Document Intelligence</span>
+          </div>
+          {profileLoading && !activeProfile ? (
+            <div className="profile-loading">
+              <Spinner />
+              <span>Reading profile</span>
+            </div>
+          ) : activeProfile ? (
+            <article className="profile-card">
+              <div className="profile-title">
+                <Brain size={17} />
+                <strong>{activeProfile.title}</strong>
+              </div>
+
+              {activeProfile.summary?.length > 0 && (
+                <ul className="profile-summary">
+                  {activeProfile.summary.slice(0, 3).map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              )}
+
+              {activeProfile.key_terms?.length > 0 && (
+                <div className="profile-cluster">
+                  <span>
+                    <Hash size={13} />
+                    Key terms
+                  </span>
+                  <div className="term-strip wrap">
+                    {activeProfile.key_terms.slice(0, 8).map((term) => (
+                      <span key={term}>{term}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeProfile.sections?.length > 0 && (
+                <div className="profile-cluster">
+                  <span>
+                    <Layers3 size={13} />
+                    Sections
+                  </span>
+                  <div className="section-list">
+                    {activeProfile.sections.slice(0, 5).map((section) => (
+                      <div key={section.title}>
+                        <strong>{section.title}</strong>
+                        <small>p.{section.first_page} - {section.chunk_count} chunks</small>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeProfile.date_mentions?.length > 0 && (
+                <div className="profile-cluster">
+                  <span>
+                    <CalendarDays size={13} />
+                    Dates
+                  </span>
+                  <div className="term-strip wrap">
+                    {activeProfile.date_mentions.slice(0, 6).map((date) => (
+                      <span key={date}>{date}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </article>
+          ) : (
+            <div className="empty-recent">Select or upload a profiled document</div>
           )}
         </div>
 

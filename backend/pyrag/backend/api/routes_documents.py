@@ -5,14 +5,35 @@ PyRAG — Document API Routes
 import os
 import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from models.schemas import DocumentInfo, DocumentListResponse, ChunkPreview, ChunkListResponse
+from models.schemas import (
+    DocumentInfo,
+    DocumentListResponse,
+    DocumentProfileResponse,
+    ChunkPreview,
+    ChunkListResponse,
+)
 from services.ingestion import ingest_document
 from services.vector_store import delete_document_chunks, get_document_chunks
-from services.chunker import estimate_tokens
-from db.database import get_all_documents, get_document, delete_document
+from db.database import get_all_documents, get_document, delete_document, get_document_profile
 from config import MAX_UPLOAD_SIZE, STORAGE_DIR
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
+
+
+def _to_document_info(doc: dict) -> DocumentInfo:
+    profile = get_document_profile(doc["id"]) or {}
+    return DocumentInfo(
+        id=doc['id'],
+        filename=doc['filename'],
+        page_count=doc['page_count'],
+        chunk_count=doc['chunk_count'],
+        file_size=doc['file_size'],
+        uploaded_at=doc['uploaded_at'],
+        status=doc['status'],
+        title=profile.get("title"),
+        summary=(profile.get("summary") or [])[:2],
+        key_terms=(profile.get("key_terms") or [])[:8]
+    )
 
 
 @router.post("/upload", response_model=list[DocumentInfo])
@@ -39,15 +60,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
             doc_id = ingest_document(tmp_path, file.filename)
             doc = get_document(doc_id)
 
-            results.append(DocumentInfo(
-                id=doc['id'],
-                filename=doc['filename'],
-                page_count=doc['page_count'],
-                chunk_count=doc['chunk_count'],
-                file_size=doc['file_size'],
-                uploaded_at=doc['uploaded_at'],
-                status=doc['status']
-            ))
+            results.append(_to_document_info(doc))
         except Exception as e:
             raise HTTPException(500, f"Failed to process {file.filename}: {str(e)}")
         finally:
@@ -60,18 +73,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
 async def list_documents():
     """List all uploaded documents."""
     docs = get_all_documents()
-    items = [
-        DocumentInfo(
-            id=d['id'],
-            filename=d['filename'],
-            page_count=d['page_count'],
-            chunk_count=d['chunk_count'],
-            file_size=d['file_size'],
-            uploaded_at=d['uploaded_at'],
-            status=d['status']
-        )
-        for d in docs
-    ]
+    items = [_to_document_info(d) for d in docs]
     return DocumentListResponse(documents=items, total=len(items))
 
 
@@ -96,6 +98,20 @@ async def remove_document(doc_id: str):
     return {"message": f"Document '{doc['filename']}' deleted", "id": doc_id}
 
 
+@router.get("/{doc_id}/profile", response_model=DocumentProfileResponse)
+async def document_profile(doc_id: str):
+    """Return the document intelligence profile generated during ingestion."""
+    doc = get_document(doc_id)
+    if not doc:
+        raise HTTPException(404, "Document not found")
+
+    profile = get_document_profile(doc_id)
+    if not profile:
+        raise HTTPException(404, "Document profile not found. Re-upload the document to generate one.")
+
+    return DocumentProfileResponse(**profile)
+
+
 @router.get("/{doc_id}/chunks", response_model=ChunkListResponse)
 async def preview_chunks(doc_id: str):
     """Preview the chunks for a document (useful for debugging)."""
@@ -113,7 +129,8 @@ async def preview_chunks(doc_id: str):
                 chunk_index=c['metadata']['chunk_index'],
                 page_number=c['metadata']['page_number'],
                 text=c['text'],
-                token_count=c['metadata']['token_count']
+                token_count=c['metadata']['token_count'],
+                section_title=c['metadata'].get('section_title')
             )
             for c in chunks
         ],

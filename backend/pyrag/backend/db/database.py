@@ -41,6 +41,13 @@ def init_db():
             processing_time REAL,
             created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS document_profiles (
+            document_id TEXT PRIMARY KEY,
+            profile_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
+        );
     """)
     conn.commit()
     conn.close()
@@ -84,6 +91,7 @@ def get_all_documents():
 
 def delete_document(doc_id: str):
     conn = get_connection()
+    conn.execute("DELETE FROM document_profiles WHERE document_id = ?", (doc_id,))
     conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
     conn.commit()
     conn.close()
@@ -101,6 +109,32 @@ def get_total_chunks():
     total = conn.execute("SELECT COALESCE(SUM(chunk_count), 0) FROM documents WHERE status = 'ready'").fetchone()[0]
     conn.close()
     return total
+
+
+# Document profiles
+
+def save_document_profile(doc_id: str, profile: dict):
+    conn = get_connection()
+    conn.execute(
+        """INSERT INTO document_profiles (document_id, profile_json, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(document_id) DO UPDATE SET
+             profile_json = excluded.profile_json,
+             updated_at = excluded.updated_at""",
+        (doc_id, json.dumps(profile), datetime.now().isoformat())
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_document_profile(doc_id: str):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT profile_json FROM document_profiles WHERE document_id = ?",
+        (doc_id,)
+    ).fetchone()
+    conn.close()
+    return json.loads(row["profile_json"]) if row else None
 
 
 # ── Chat History ──

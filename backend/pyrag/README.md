@@ -147,6 +147,7 @@ def embed_query(query):
 | `/api/documents/upload` | POST | Upload PDF files |
 | `/api/documents` | GET | List all documents |
 | `/api/documents/{id}` | DELETE | Delete a document |
+| `/api/documents/{id}/profile` | GET | Get document title, summary, key terms, sections, and dates |
 | `/api/documents/{id}/chunks` | GET | Preview chunks |
 | `/api/chat/ask` | POST | Ask a question |
 | `/api/chat/history` | GET | Get chat history |

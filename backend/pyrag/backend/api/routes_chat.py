@@ -32,6 +32,7 @@ async def ask_question(request: ChatRequest):
                     "document_name": s['document_name'],
                     "document_id": s['document_id'],
                     "page_number": s['page_number'],
+                    "section_title": s.get('section_title'),
                     "chunk_text": s['chunk_text'],
                     "similarity_score": s['similarity_score']
                 }

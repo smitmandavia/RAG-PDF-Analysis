@@ -61,7 +61,8 @@ def add_chunks(doc_id: str, doc_name: str, chunks: list, embeddings: list[list[f
             "document_name": doc_name,
             "page_number": c.page_number,
             "chunk_index": c.chunk_index,
-            "token_count": c.token_count
+            "token_count": c.token_count,
+            "section_title": c.section_title
         }
         for c in chunks
     ]

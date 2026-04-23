@@ -63,3 +63,20 @@ Runtime artifacts are intentionally ignored by Git:
 - Vite build output
 
 Upload PDFs again after cloning to build a fresh local index.
+
+## Document Intelligence
+
+During upload, PyRAG now builds a local document profile:
+
+- Extracted title
+- Summary bullets
+- Key terms
+- Section map
+- Date mentions
+- Chunk metadata with page and section context
+
+The profile is available at:
+
+```text
+GET /api/documents/{document_id}/profile
+```

@@ -17,11 +17,25 @@ class DocumentInfo(BaseModel):
     file_size: int  # bytes
     uploaded_at: str
     status: str  # "processing", "ready", "error"
+    title: Optional[str] = None
+    summary: Optional[list[str]] = None
+    key_terms: Optional[list[str]] = None
 
 
 class DocumentListResponse(BaseModel):
     documents: list[DocumentInfo]
     total: int
+
+
+class DocumentProfileResponse(BaseModel):
+    document_id: str
+    filename: str
+    title: str
+    summary: list[str]
+    key_terms: list[str]
+    sections: list[dict]
+    date_mentions: list[str]
+    stats: dict
 
 
 # ── Chat Models ──
@@ -40,6 +54,7 @@ class SourceChunk(BaseModel):
     page_number: int
     chunk_text: str
     similarity_score: float
+    section_title: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -56,6 +71,7 @@ class ChunkPreview(BaseModel):
     page_number: int
     text: str
     token_count: int
+    section_title: Optional[str] = None
 
 
 class ChunkListResponse(BaseModel):
